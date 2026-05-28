@@ -105,6 +105,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # RESPONDER INTELIGENTE
 # =========================
 async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    print("📩 MENSAJE RECIBIDO:", update.message.text)
+    await update.message.reply_text("✔ RECIBIDO")
 
     text = update.message.text
     intent = detectar_intencion(text)
