@@ -363,55 +363,43 @@ async def telegram_webhook():
 asgi_app = WsgiToAsgi(web_app)
 
 
+```python
 # =========================
 # INICIO
 # =========================
 
+WEBHOOK_URL = "https://telegram-bot-4-xqls.onrender.com/telegram"
+
+
 async def iniciar_bot():
 
-    print(
-        "🤖 Bot NexoVentas Studio iniciando..."
-    )
+    print("🤖 Bot NexoVentas Studio iniciando...", flush=True)
 
     await bot_app.initialize()
     await bot_app.start()
 
-    if RENDER_URL:
+    print(
+        f"🌐 Webhook: {WEBHOOK_URL}",
+        flush=True
+    )
 
-        webhook_url = (
-            f"{RENDER_URL}/telegram"
-        )
+    await bot_app.bot.set_webhook(
+        url=WEBHOOK_URL,
+        drop_pending_updates=True
+    )
 
-        print(
-            f"🌐 Webhook: {webhook_url}"
-        )
+    print(
+        "❤️ Health: https://telegram-bot-4-xqls.onrender.com/health",
+        flush=True
+    )
 
-        await bot_app.bot.set_webhook(
-            url=webhook_url,
-            drop_pending_updates=True
-        )
-
-        print(
-            f"❤️ Health: {RENDER_URL}/health"
-        )
-
-        print(
-            f"🔌 Puerto: {PORT}"
-        )
+    print(
+        f"🔌 Puerto: {PORT}",
+        flush=True
+    )
 
 
 def main():
-
-    if not RENDER_URL:
-
-        print(
-            "🤖 Ejecutando bot mediante polling "
-            "para pruebas locales..."
-        )
-
-        bot_app.run_polling()
-
-        return
 
     import asyncio
 
@@ -426,3 +414,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+```
