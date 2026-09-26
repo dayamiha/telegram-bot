@@ -1,5 +1,7 @@
 import os
-import json
+
+from fastapi import FastAPI, Request
+from fastapi.responses import PlainTextResponse
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -10,10 +12,7 @@ from telegram.ext import (
     filters,
 )
 
-# Servidor HTTP
 import uvicorn
-from asgiref.wsgi import WsgiToAsgi
-from flask import Flask, request, Response
 
 
 # =========================
@@ -32,9 +31,11 @@ WHATSAPP = os.getenv(
     "https://wa.me/5352016762"
 )
 
-RENDER_URL = os.getenv("RENDER_EXTERNAL_URL")
-
 PORT = int(os.getenv("PORT", "10000"))
+
+WEBHOOK_URL = (
+    "https://telegram-bot-4-xqls.onrender.com/telegram"
+)
 
 
 # =========================
@@ -167,7 +168,8 @@ async def responder(
 
     print(
         "📩 MENSAJE RECIBIDO:",
-        update.message.text
+        update.message.text,
+        flush=True
     )
 
     text = update.message.text
@@ -292,7 +294,7 @@ async def stats(
 
 
 # =========================
-# CREAR APLICACIÓN DEL BOT
+# CREAR APLICACIÓN TELEGRAM
 # =========================
 
 bot_app = (
@@ -302,13 +304,16 @@ bot_app = (
     .build()
 )
 
+
 bot_app.add_handler(
     CommandHandler("start", start)
 )
 
+
 bot_app.add_handler(
     CommandHandler("stats", stats)
 )
+
 
 bot_app.add_handler(
     MessageHandler(
@@ -319,58 +324,18 @@ bot_app.add_handler(
 
 
 # =========================
-# SERVIDOR HEALTH
+# FASTAPI
 # =========================
 
-web_app = Flask(__name__)
-
-
-@web_app.route("/health", methods=["GET"])
-def health():
-
-    return Response(
-        "OK",
-        status=200,
-        mimetype="text/plain"
-    )
-
-
-@web_app.route("/telegram", methods=["POST"])
-async def telegram_webhook():
-
-    data = request.get_json(silent=True)
-
-    if not data:
-        return Response(
-            "Bad Request",
-            status=400
-        )
-
-    update = Update.de_json(
-        data,
-        bot_app.bot
-    )
-
-    await bot_app.process_update(update)
-
-    return Response(
-        "OK",
-        status=200
-    )
-
-
-# Convertir Flask a ASGI para Uvicorn
-asgi_app = WsgiToAsgi(web_app)
+web_app = FastAPI()
 
 
 # =========================
-# INICIO
+# INICIO DEL SERVIDOR
 # =========================
 
-WEBHOOK_URL = "https://telegram-bot-4-xqls.onrender.com/telegram"
-
-
-async def iniciar_bot():
+@web_app.on_event("startup")
+async def startup():
 
     print(
         "🤖 Bot NexoVentas Studio iniciando...",
@@ -391,7 +356,7 @@ async def iniciar_bot():
     )
 
     print(
-        "❤️ Health: https://telegram-bot-4-xqls.onrender.com/health",
+        f"❤️ Health: https://telegram-bot-4-xqls.onrender.com/health",
         flush=True
     )
 
@@ -401,31 +366,78 @@ async def iniciar_bot():
     )
 
 
-async def ejecutar():
+# =========================
+# CIERRE DEL SERVIDOR
+# =========================
 
-    await iniciar_bot()
+@web_app.on_event("shutdown")
+async def shutdown():
 
-    config = uvicorn.Config(
-        asgi_app,
-        host="0.0.0.0",
-        port=PORT,
-        log_level="info"
+    print(
+        "🛑 Deteniendo bot...",
+        flush=True
     )
 
-    server = uvicorn.Server(config)
+    await bot_app.stop()
+    await bot_app.shutdown()
 
-    try:
 
-        await server.serve()
+# =========================
+# HEALTH CHECK
+# =========================
 
-    finally:
+@web_app.get("/health")
+async def health():
 
-        await bot_app.stop()
-        await bot_app.shutdown()
+    return PlainTextResponse(
+        "OK",
+        status_code=200
+    )
 
+
+# =========================
+# WEBHOOK TELEGRAM
+# =========================
+
+@web_app.post("/telegram")
+async def telegram_webhook(request: Request):
+
+    data = await request.json()
+
+    update = Update.de_json(
+        data,
+        bot_app.bot
+    )
+
+    await bot_app.process_update(update)
+
+    return PlainTextResponse(
+        "OK",
+        status_code=200
+    )
+
+
+# =========================
+# RAÍZ
+# =========================
+
+@web_app.get("/")
+async def root():
+
+    return PlainTextResponse(
+        "NexoVentas Studio Bot activo",
+        status_code=200
+    )
+
+
+# =========================
+# EJECUTAR
+# =========================
 
 if __name__ == "__main__":
 
-    import asyncio
-
-    asyncio.run(ejecutar())
+    uvicorn.run(
+        web_app,
+        host="0.0.0.0",
+        port=PORT
+    )
