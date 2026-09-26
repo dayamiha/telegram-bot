@@ -372,7 +372,10 @@ WEBHOOK_URL = "https://telegram-bot-4-xqls.onrender.com/telegram"
 
 async def iniciar_bot():
 
-    print("🤖 Bot NexoVentas Studio iniciando...", flush=True)
+    print(
+        "🤖 Bot NexoVentas Studio iniciando...",
+        flush=True
+    )
 
     await bot_app.initialize()
     await bot_app.start()
@@ -398,18 +401,31 @@ async def iniciar_bot():
     )
 
 
-def main():
+async def ejecutar():
 
-    import asyncio
+    await iniciar_bot()
 
-    asyncio.run(iniciar_bot())
-
-    uvicorn.run(
+    config = uvicorn.Config(
         asgi_app,
         host="0.0.0.0",
-        port=PORT
+        port=PORT,
+        log_level="info"
     )
+
+    server = uvicorn.Server(config)
+
+    try:
+
+        await server.serve()
+
+    finally:
+
+        await bot_app.stop()
+        await bot_app.shutdown()
 
 
 if __name__ == "__main__":
-    main()
+
+    import asyncio
+
+    asyncio.run(ejecutar())
