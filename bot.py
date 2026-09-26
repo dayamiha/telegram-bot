@@ -13,7 +13,7 @@ from telegram.ext import (
 TOKEN = "8578279513:AAEbcZzaFl3S8OTAtcINV1VGHuJLoORf1ho"
 
 CANAL = "https://t.me/+eUUFOhzJSw44ZmM5"
-WHATSAPP = "https://wa.me/5350755467"
+WHATSAPP = "https://wa.me/5352016762"
 
 # =========================
 # ESTADO GLOBAL SIMPLE (puedes luego migrar a DB)
