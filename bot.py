@@ -363,7 +363,6 @@ async def telegram_webhook():
 asgi_app = WsgiToAsgi(web_app)
 
 
-```python
 # =========================
 # INICIO
 # =========================
@@ -414,4 +413,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-```
