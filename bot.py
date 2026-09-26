@@ -1,4 +1,6 @@
+```python
 import os
+import json
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -8,6 +10,12 @@ from telegram.ext import (
     ContextTypes,
     filters,
 )
+
+# Servidor HTTP
+import uvicorn
+from asgiref.wsgi import WsgiToAsgi
+from flask import Flask, request, Response
+
 
 # =========================
 # CONFIG
@@ -25,48 +33,9 @@ WHATSAPP = os.getenv(
     "https://wa.me/5352016762"
 )
 
-# Render proporciona automáticamente la URL pública
-# del Web Service mediante RENDER_EXTERNAL_URL.
 RENDER_URL = os.getenv("RENDER_EXTERNAL_URL")
 
 PORT = int(os.getenv("PORT", "10000"))
-
-
-# =========================
-# HEALTH CHECK PARA RENDER
-# =========================
-
-from http.server import BaseHTTPRequestHandler, HTTPServer
-import threading
-
-
-class HealthHandler(BaseHTTPRequestHandler):
-
-    def do_GET(self):
-        if self.path == "/health":
-            self.send_response(200)
-            self.send_header("Content-type", "text/plain")
-            self.end_headers()
-            self.wfile.write(b"OK")
-        else:
-            self.send_response(404)
-            self.end_headers()
-
-    def log_message(self, format, *args):
-        return
-
-
-def iniciar_health_server():
-    health_port = PORT + 1
-    server = HTTPServer(
-        ("0.0.0.0", health_port),
-        HealthHandler
-    )
-
-    print(f"❤️ Health server en puerto {health_port}")
-
-    server.serve_forever()
-
 
 
 # =========================
@@ -78,12 +47,6 @@ if not TOKEN:
         "Falta la variable de entorno BOT_TOKEN."
     )
 
-if not RENDER_URL:
-    print(
-        "⚠️ RENDER_EXTERNAL_URL no está definida. "
-        "El bot funcionará localmente solamente si se configura "
-        "otra URL de webhook."
-    )
 
 # =========================
 # ESTADO GLOBAL SIMPLE
@@ -104,7 +67,7 @@ def detectar_intencion(text: str):
 
     text = text.lower()
 
-    # 🔴 RECHAZO
+    # RECHAZO
     if any(w in text for w in [
         "no me interesa",
         "no quiero",
@@ -114,7 +77,7 @@ def detectar_intencion(text: str):
     ]):
         return "rechazo"
 
-    # 🟡 INTERÉS
+    # INTERÉS
     if any(w in text for w in [
         "tienda",
         "catálogo",
@@ -128,7 +91,7 @@ def detectar_intencion(text: str):
     ]):
         return "interesado"
 
-    # 👋 SALUDO
+    # SALUDO
     if any(w in text for w in [
         "hola",
         "buenas",
@@ -195,7 +158,7 @@ async def start(
 
 
 # =========================
-# RESPONDER INTELIGENTE
+# RESPONDER
 # =========================
 
 async def responder(
@@ -225,7 +188,6 @@ async def responder(
         analytics["rechazos"] += 1
 
         user_data["state"] = "rechazado"
-
         user_data["score"] = score - 5
 
         await update.message.reply_text(
@@ -269,7 +231,6 @@ async def responder(
         analytics["interesados"] += 1
 
         user_data["state"] = "interesado"
-
         user_data["score"] = score + 2
 
         keyboard = [
@@ -332,98 +293,138 @@ async def stats(
 
 
 # =========================
-# MAIN
+# CREAR APLICACIÓN DEL BOT
 # =========================
+
+bot_app = (
+    Application
+    .builder()
+    .token(TOKEN)
+    .build()
+)
+
+bot_app.add_handler(
+    CommandHandler("start", start)
+)
+
+bot_app.add_handler(
+    CommandHandler("stats", stats)
+)
+
+bot_app.add_handler(
+    MessageHandler(
+        filters.TEXT & ~filters.COMMAND,
+        responder
+    )
+)
+
+
+# =========================
+# SERVIDOR HEALTH
+# =========================
+
+web_app = Flask(__name__)
+
+
+@web_app.route("/health", methods=["GET"])
+def health():
+
+    return Response(
+        "OK",
+        status=200,
+        mimetype="text/plain"
+    )
+
+
+@web_app.route("/telegram", methods=["POST"])
+async def telegram_webhook():
+
+    data = request.get_json(silent=True)
+
+    if not data:
+        return Response(
+            "Bad Request",
+            status=400
+        )
+
+    update = Update.de_json(
+        data,
+        bot_app.bot
+    )
+
+    await bot_app.process_update(update)
+
+    return Response(
+        "OK",
+        status=200
+    )
+
+
+# Convertir Flask a ASGI para Uvicorn
+asgi_app = WsgiToAsgi(web_app)
+
+
+# =========================
+# INICIO
+# =========================
+
+async def iniciar_bot():
+
+    print(
+        "🤖 Bot NexoVentas Studio iniciando..."
+    )
+
+    await bot_app.initialize()
+    await bot_app.start()
+
+    if RENDER_URL:
+
+        webhook_url = (
+            f"{RENDER_URL}/telegram"
+        )
+
+        print(
+            f"🌐 Webhook: {webhook_url}"
+        )
+
+        await bot_app.bot.set_webhook(
+            url=webhook_url,
+            drop_pending_updates=True
+        )
+
+        print(
+            f"❤️ Health: {RENDER_URL}/health"
+        )
+
+        print(
+            f"🔌 Puerto: {PORT}"
+        )
+
 
 def main():
 
     if not RENDER_URL:
 
         print(
-            "⚠️ No se encontró RENDER_EXTERNAL_URL."
-        )
-
-        print(
             "🤖 Ejecutando bot mediante polling "
             "para pruebas locales..."
         )
 
-        app = (
-            Application
-            .builder()
-            .token(TOKEN)
-            .build()
-        )
-
-        app.add_handler(
-            CommandHandler("start", start)
-        )
-
-        app.add_handler(
-            CommandHandler("stats", stats)
-        )
-
-        app.add_handler(
-            MessageHandler(
-                filters.TEXT & ~filters.COMMAND,
-                responder
-            )
-        )
-
-        app.run_polling()
+        bot_app.run_polling()
 
         return
 
-    # =========================
-    # RENDER / WEBHOOK
-    # =========================
+    import asyncio
 
-    webhook_url = (
-        f"{RENDER_URL}/telegram"
-    )
+    asyncio.run(iniciar_bot())
 
-    print(
-        "🤖 Bot NexoVentas Studio iniciando..."
-    )
-
-    print(
-        f"🌐 Webhook: {webhook_url}"
-    )
-
-    print(
-        f"🔌 Puerto: {PORT}"
-    )
-
-    app = (
-        Application
-        .builder()
-        .token(TOKEN)
-        .build()
-    )
-
-    app.add_handler(
-        CommandHandler("start", start)
-    )
-
-    app.add_handler(
-        CommandHandler("stats", stats)
-    )
-
-    app.add_handler(
-        MessageHandler(
-            filters.TEXT & ~filters.COMMAND,
-            responder
-        )
-    )
-
-    app.run_webhook(
-        listen="0.0.0.0",
-        port=PORT,
-        url_path="telegram",
-        webhook_url=webhook_url,
-        drop_pending_updates=True,
+    uvicorn.run(
+        asgi_app,
+        host="0.0.0.0",
+        port=PORT
     )
 
 
 if __name__ == "__main__":
     main()
+```
