@@ -1,3 +1,5 @@
+import os
+
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
@@ -10,10 +12,18 @@ from telegram.ext import (
 # =========================
 # CONFIG
 # =========================
-TOKEN = "8578279513:AAEbcZzaFl3S8OTAtcINV1VGHuJLoORf1ho"
 
-CANAL = "https://t.me/+eUUFOhzJSw44ZmM5"
-WHATSAPP = "https://wa.me/5352016762"
+TOKEN = os.getenv("BOT_TOKEN")
+
+CANAL = os.getenv(
+    "CANAL",
+    "https://t.me/+eUUFOhzJSw44ZmM5"
+)
+
+WHATSAPP = os.getenv(
+    "WHATSAPP",
+    "https://wa.me/5352016762"
+)
 
 # Render proporciona automáticamente la URL pública
 # del Web Service mediante RENDER_EXTERNAL_URL.
@@ -375,11 +385,6 @@ def main():
         webhook_url=webhook_url,
         drop_pending_updates=True,
     )
-
-
-if __name__ == "__main__":
-    main()
-    app.run_polling()
 
 
 if __name__ == "__main__":
